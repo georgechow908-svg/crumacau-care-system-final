@@ -3,10 +3,13 @@ import {
   Users, CalendarDays, UserPlus, Clock, Phone,
   HeartHandshake, Search, PlusCircle,
   ChevronRight, ClipboardList, Upload, Filter, AlertCircle, FileText,
-  Trash2, Edit, ShieldAlert, RefreshCw, Share2
+  Trash2, Edit, ShieldAlert, RefreshCw, Share2, Table
 } from 'lucide-react';
 
 const GOOGLE_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxrf_7APMtfzqUdCvJdE54PgE4vofvRui4AJ9S34o25DpLpdoB_0_uhtnZrqtvvtr48g/exec';
+
+// 新增：請將下方網址換成您真實的 Google Sheet 網址（在瀏覽器上方複製）
+const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/您的試算表ID/edit';
 
 // 根據堂會名稱自動產生固定的標籤顏色
 const getChurchColor = (churchName: string) => {
@@ -129,6 +132,12 @@ export default function App() {
     if (!m.visits || m.visits.length === 0) return null;
     const lastVisit = [...m.visits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     return lastVisit.nextFollowUpDate || null;
+  };
+
+  // 新增：取得最近一次探訪紀錄的完整物件 (為了拿取時間與產生日曆連結)
+  const getLatestVisit = (m: any) => {
+    if (!m.visits || m.visits.length === 0) return null;
+    return [...m.visits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
   };
 
   // 生成 Google 日曆專屬連結
@@ -283,6 +292,9 @@ export default function App() {
           </div>
           <div className="flex items-center gap-1">
             {isSyncing && <span className="text-teal-200 text-xs flex items-center mr-1 animate-pulse"><RefreshCw size={12} className="animate-spin" /></span>}
+            <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="p-2 hover:bg-teal-700 rounded-full transition-colors" title="開啟雲端試算表">
+              <Table size={20} className="text-white" />
+            </button>
             <button onClick={handleShare} className="p-2 hover:bg-teal-700 rounded-full transition-colors" title="分享系統連結">
               <Share2 size={20} className="text-white" />
             </button>
@@ -411,10 +423,24 @@ export default function App() {
                   <div className="text-right">
                     <div className="font-bold text-lg leading-tight">{selectedMinister.church}</div>
                     <div className="text-sm opacity-90 mb-2">{selectedMinister.ministry}</div>
-                    <div className={`text-xs px-2 py-1 rounded-md inline-flex items-center gap-1 font-bold ${(!getNextDate(selectedMinister) || getNextDate(selectedMinister) >= today) ? 'bg-white/20 text-white' : 'bg-red-500 text-white shadow-sm'}`}>
-                      <CalendarDays size={12} />
-                      下次跟進: {getNextDate(selectedMinister) || '未設定'}
-                    </div>
+                    {(() => {
+                      const latestV = getLatestVisit(selectedMinister);
+                      if (latestV && latestV.nextFollowUpDate) {
+                        return (
+                          <a href={getCalendarLink(selectedMinister, latestV)} target="_blank" rel="noopener noreferrer" className={`text-xs px-2 py-1 rounded-md inline-flex items-center gap-1 font-bold hover:opacity-80 transition-opacity shadow-sm ${latestV.nextFollowUpDate >= today ? 'bg-white/20 text-white' : 'bg-red-500 text-white'}`}>
+                            <CalendarDays size={12} />
+                            下次跟進: {latestV.nextFollowUpDate} {latestV.nextFollowUpTime || '10:00'}
+                            <ChevronRight size={12} className="opacity-70" />
+                          </a>
+                        );
+                      }
+                      return (
+                        <div className="text-xs px-2 py-1 rounded-md inline-flex items-center gap-1 font-bold bg-white/20 text-white">
+                          <CalendarDays size={12} />
+                          下次跟進: 未設定
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -521,15 +547,13 @@ export default function App() {
                       <div className="space-y-4">
                         <div><div className="text-xs font-bold text-slate-400 mb-1">跟進內容與建議:</div><div className="text-slate-700 whitespace-pre-wrap leading-relaxed bg-slate-50 p-3 rounded-md border border-slate-100">{v.notes}</div></div>
                         
-                        {/* 支援 Google 日曆自動建立連結的下次跟進日 */}
+                        {/* 還原為純文字顯示的下次跟進日 */}
                         <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-50 border-dashed">
-                          <div className="text-xs font-bold text-slate-500">下次預計跟進:</div>
+                          <div className="text-xs font-bold text-slate-500">下次預計跟進日期:</div>
                           {v.nextFollowUpDate ? (
-                            <a href={getCalendarLink(selectedMinister, v)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors border border-teal-100">
-                              <CalendarDays size={14} />
+                            <div className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">
                               {v.nextFollowUpDate} {v.nextFollowUpTime || '10:00'}
-                              <ChevronRight size={14} className="opacity-50" />
-                            </a>
+                            </div>
                           ) : (
                             <div className="font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">未設定</div>
                           )}
