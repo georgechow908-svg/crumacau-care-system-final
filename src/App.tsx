@@ -408,9 +408,11 @@ export default function App() {
 
               <div className="bg-teal-700 p-6 text-white pt-8">
                 <div className="flex justify-between items-start gap-3">
-                  <div className="flex-1 min-w-0">
+                  {/* 加入 text-left 強制文字靠左對齊 */}
+                  <div className="flex-1 min-w-0 text-left">
                     <h2 className="text-3xl font-bold mb-1 text-white truncate">{selectedMinister.name}</h2>
-                    <p className="opacity-90 flex items-center gap-2 mt-2">
+                    {/* 加入 justify-start 強制元素靠左排列 */}
+                    <p className="opacity-90 flex items-center justify-start gap-2 mt-2">
                       <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm whitespace-nowrap shrink-0">{selectedMinister.gender}</span>
                       <span className="whitespace-nowrap">已探訪 {selectedMinister.visits ? selectedMinister.visits.length : 0} 次</span>
                     </p>
