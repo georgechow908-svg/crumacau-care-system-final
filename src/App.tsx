@@ -8,7 +8,7 @@ import {
 
 const GOOGLE_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxrf_7APMtfzqUdCvJdE54PgE4vofvRui4AJ9S34o25DpLpdoB_0_uhtnZrqtvvtr48g/exec';
 
-// 新增：請將下方網址換成您真實的 Google Sheet 網址（在瀏覽器上方複製）
+// 請將下方網址換成您真實的 Google Sheet 網址
 const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1lj2hc3PwI8e6-qbCpaGhkV-cWMVnJ6lESZlrChUS0Zw/edit?gid=958065887#gid=958065887';
 
 // 根據堂會名稱自動產生固定的標籤顏色
@@ -134,13 +134,11 @@ export default function App() {
     return lastVisit.nextFollowUpDate || null;
   };
 
-  // 新增：取得最近一次探訪紀錄的完整物件 (為了拿取時間與產生日曆連結)
   const getLatestVisit = (m: any) => {
     if (!m.visits || m.visits.length === 0) return null;
     return [...m.visits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
   };
 
-  // 生成 Google 日曆專屬連結
   const getCalendarLink = (minister: any, visit: any) => {
     if (!visit.nextFollowUpDate) return '#';
     const dateStr = visit.nextFollowUpDate.replace(/-/g, '');
@@ -280,7 +278,6 @@ export default function App() {
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
             <HeartHandshake className="w-6 h-6 text-teal-300" />
-            {/* 強制標題文字為白色 */}
             <h1 className="text-xl font-bold flex items-center gap-2 text-white">
               宣道堂帶職傳道關懷系統
               {isSuperAdmin && (
@@ -348,7 +345,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 重新設計的現代化卡片列表 */}
             <div className="space-y-3 relative min-h-[200px]">
               {isLoading && (
                 <div className="absolute inset-0 bg-slate-50/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center py-12">
@@ -365,7 +361,6 @@ export default function App() {
                 return (
                   <div key={m.id} onClick={() => setSelectedId(m.id)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer active:scale-[0.98] hover:shadow-md transition-all">
                     <div className="flex items-center gap-3">
-                      {/* 堂會專屬顏色頭像 */}
                       <div className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg border-2 ${getChurchColor(m.church)}`}>
                         {m.church ? m.church.charAt(0) : '?'}
                       </div>
@@ -381,7 +376,7 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col items-end gap-1.5">
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">已探訪 {m.visits?.length || 0} 次</span>
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">已探訪 {m.visits?.length || 0} 次</span>
                       <div className={`text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1 ${!nextDate ? 'text-slate-400 bg-slate-50' : isoverdue ? 'text-white bg-red-500 shadow-sm' : isToday ? 'text-white bg-orange-500 shadow-sm' : 'text-teal-700 bg-teal-50'}`}>
                         {nextDate ? `跟進: ${nextDate}` : '未設定跟進'}
                       </div>
@@ -412,32 +407,42 @@ export default function App() {
               )}
 
               <div className="bg-teal-700 p-6 text-white pt-8">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-3xl font-bold mb-1">{selectedMinister.name}</h2>
-                    <p className="opacity-90 flex items-center gap-2">
-                      <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm">{selectedMinister.gender}</span>
-                      <span>已探訪 {selectedMinister.visits ? selectedMinister.visits.length : 0} 次</span>
+                <div className="flex justify-between items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-3xl font-bold mb-1 text-white truncate">{selectedMinister.name}</h2>
+                    <p className="opacity-90 flex items-center gap-2 mt-2">
+                      <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm whitespace-nowrap shrink-0">{selectedMinister.gender}</span>
+                      <span className="whitespace-nowrap">已探訪 {selectedMinister.visits ? selectedMinister.visits.length : 0} 次</span>
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0 flex flex-col items-end">
                     <div className="font-bold text-lg leading-tight">{selectedMinister.church}</div>
-                    <div className="text-sm opacity-90 mb-2">{selectedMinister.ministry}</div>
+                    <div className="text-sm opacity-90 mb-3">{selectedMinister.ministry}</div>
                     {(() => {
                       const latestV = getLatestVisit(selectedMinister);
                       if (latestV && latestV.nextFollowUpDate) {
                         return (
-                          <a href={getCalendarLink(selectedMinister, latestV)} target="_blank" rel="noopener noreferrer" className={`text-xs px-2 py-1 rounded-md inline-flex items-center gap-1 font-bold hover:opacity-80 transition-opacity shadow-sm ${latestV.nextFollowUpDate >= today ? 'bg-white/20 text-white' : 'bg-red-500 text-white'}`}>
-                            <CalendarDays size={12} />
-                            下次跟進: {latestV.nextFollowUpDate} {latestV.nextFollowUpTime || '10:00'}
-                            <ChevronRight size={12} className="opacity-70" />
+                          <a href={getCalendarLink(selectedMinister, latestV)} target="_blank" rel="noopener noreferrer" className={`px-2.5 py-1.5 rounded-md inline-flex flex-col items-end gap-1 hover:opacity-80 transition-opacity shadow-sm ${latestV.nextFollowUpDate >= today ? 'bg-white/20 text-white' : 'bg-red-500 text-white'}`}>
+                            <div className="flex items-center gap-1 text-[11px] opacity-90 font-medium">
+                              <CalendarDays size={12} />
+                              <span>下次跟進日期:</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-sm font-bold">
+                              <span>{latestV.nextFollowUpDate} {latestV.nextFollowUpTime || '10:00'}</span>
+                              <ChevronRight size={14} className="opacity-70" />
+                            </div>
                           </a>
                         );
                       }
                       return (
-                        <div className="text-xs px-2 py-1 rounded-md inline-flex items-center gap-1 font-bold bg-white/20 text-white">
-                          <CalendarDays size={12} />
-                          下次跟進: 未設定
+                        <div className="px-2.5 py-1.5 rounded-md inline-flex flex-col items-end gap-1 bg-white/20 text-white">
+                          <div className="flex items-center gap-1 text-[11px] opacity-90 font-medium">
+                            <CalendarDays size={12} />
+                            <span>下次跟進日期:</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-sm font-bold opacity-80">
+                            <span>未設定</span>
+                          </div>
                         </div>
                       );
                     })()}
@@ -457,7 +462,6 @@ export default function App() {
                 <div className="flex items-center justify-between md:justify-end gap-4">
                   <span className="text-slate-400">目前狀態:</span>
                   <span className="px-3 py-1 bg-teal-100 text-teal-800 text-xs rounded-full font-bold">
-                    {/* 防呆機制：若狀態為空，顯示預設值 */}
                     {selectedMinister.status || '持續關懷中'}
                   </span>
                 </div>
@@ -526,7 +530,6 @@ export default function App() {
                         </div>
                       )}
                       
-                      {/* 同工與反應並排並置中 */}
                       <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
                         <div className="flex flex-col">
                           <span className="font-bold text-slate-800 text-lg">{v.date}</span>
@@ -547,7 +550,6 @@ export default function App() {
                       <div className="space-y-4">
                         <div><div className="text-xs font-bold text-slate-400 mb-1">跟進內容與建議:</div><div className="text-slate-700 whitespace-pre-wrap leading-relaxed bg-slate-50 p-3 rounded-md border border-slate-100">{v.notes}</div></div>
                         
-                        {/* 還原為純文字顯示的下次跟進日 */}
                         <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-50 border-dashed">
                           <div className="text-xs font-bold text-slate-500">下次預計跟進日期:</div>
                           {v.nextFollowUpDate ? (
