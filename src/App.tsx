@@ -9,7 +9,7 @@ import {
 const GOOGLE_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxrf_7APMtfzqUdCvJdE54PgE4vofvRui4AJ9S34o25DpLpdoB_0_uhtnZrqtvvtr48g/exec';
 
 // 新增：請將下方網址換成您真實的 Google Sheet 網址（在瀏覽器上方複製）
-const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1lj2hc3PwI8e6-qbCpaGhkV-cWMVnJ6lESZlrChUS0Zw/edit?gid=520015807#gid=520015807';
+const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1lj2hc3PwI8e6-qbCpaGhkV-cWMVnJ6lESZlrChUS0Zw/edit?gid=958065887#gid=958065887';
 
 // 根據堂會名稱自動產生固定的標籤顏色
 const getChurchColor = (churchName: string) => {
