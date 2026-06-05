@@ -3,32 +3,50 @@ import {
   Users, CalendarDays, UserPlus, Clock, Phone,
   HeartHandshake, Search, PlusCircle,
   ChevronRight, ClipboardList, Upload, Filter, AlertCircle, FileText,
-  Trash2, Edit, ShieldAlert, RefreshCw, Share2, Table
+  Trash2, Edit, ShieldAlert, RefreshCw, Share2, Table, UserCog, ClipboardEdit
 } from 'lucide-react';
 
 const GOOGLE_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxrf_7APMtfzqUdCvJdE54PgE4vofvRui4AJ9S34o25DpLpdoB_0_uhtnZrqtvvtr48g/exec';
 
 // 請將下方網址換成您真實的 Google Sheet 網址
-const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1lj2hc3PwI8e6-qbCpaGhkV-cWMVnJ6lESZlrChUS0Zw/edit?gid=958065887#gid=958065887';
+const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1lj2hc3PwI8e6-qbCpaGhkV-cWMVnJ6lESZlrChUS0Zw/edit?usp=sharing';
 
-// 根據堂會名稱自動產生固定的標籤顏色
+// 嚴格綁定堂會顏色
 const getChurchColor = (churchName: string) => {
-  const palettes = [
-    'bg-teal-100 text-teal-700 border-teal-200',
-    'bg-blue-100 text-blue-700 border-blue-200',
-    'bg-indigo-100 text-indigo-700 border-indigo-200',
-    'bg-purple-100 text-purple-700 border-purple-200',
-    'bg-pink-100 text-pink-700 border-pink-200',
-    'bg-emerald-100 text-emerald-700 border-emerald-200',
-    'bg-orange-100 text-orange-700 border-orange-200',
-    'bg-amber-100 text-amber-700 border-amber-200',
-  ];
-  if (!churchName) return palettes[0];
-  let hash = 0;
-  for (let i = 0; i < churchName.length; i++) {
-    hash = churchName.charCodeAt(i) + ((hash << 5) - hash);
+  if (!churchName) return 'bg-slate-100 text-slate-700 border-slate-200'; // 預設顏色
+
+  // 移除堂會名稱中的空格以利精準比對
+  const normalizedName = churchName.trim();
+
+  switch (normalizedName) {
+    case '總堂':
+      return 'bg-purple-100 text-purple-700 border-purple-200'; // 紫
+    case '潮州堂':
+      return 'bg-orange-100 text-orange-700 border-orange-200'; // 橙
+    case '新口岸堂':
+      return 'bg-blue-100 text-blue-700 border-blue-200'; // 藍
+    case '閩南堂':
+      return 'bg-green-100 text-green-700 border-green-200'; // 綠
+    case '下環堂':
+      return 'bg-red-100 text-red-700 border-red-200'; // 紅
+    case '沙梨頭堂':
+      return 'bg-cyan-100 text-cyan-700 border-cyan-200'; // 青 (Cyan 接近青色)
+    case '筷子基堂':
+      return 'bg-yellow-100 text-yellow-700 border-yellow-200'; // 黃
+    case '氹仔堂':
+      return 'bg-stone-100 text-stone-700 border-stone-200'; // 啡 (Stone 提供良好的咖啡/卡其色系)
+    case '建華堂':
+      return 'bg-indigo-100 text-indigo-700 border-indigo-200'; // 深藍 (Indigo)
+    case '新橋堂':
+      return 'bg-amber-100 text-amber-700 border-amber-200'; // 橙黃 (Amber)
+    case '北區堂':
+      return 'bg-gray-100 text-gray-700 border-gray-200'; // 灰
+    case '祐漢堂':
+      return 'bg-yellow-50 text-yellow-600 border-yellow-300'; // 金 (微調黃色使其帶有金色質感)
+    default:
+      // 如果遇到未在名單內的堂會，提供一個備用顏色
+      return 'bg-teal-100 text-teal-700 border-teal-200'; 
   }
-  return palettes[Math.abs(hash) % palettes.length];
 };
 
 export default function App() {
@@ -47,9 +65,14 @@ export default function App() {
   const [importError, setImportError] = useState('');
   const [confirmDialog, setConfirmDialog] = useState({ show: false, message: '', onConfirm: null as any });
 
+  const [viewMode, setViewMode] = useState<'overview' | 'matching'>('overview');
+  const [matchFilter, setMatchFilter] = useState<'all' | 'unassigned' | 'assigned'>('all');
+  const [assignModal, setAssignModal] = useState({ show: false, ministerId: '', staffName: '' });
+
   const isMobileDevice = typeof window !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent);
 
-  const defaultMinister = { id: '', name: '', gender: '男', church: '', ministry: '', phone: '', status: '持續關懷中' };
+  // 新增了 situation (現況) 欄位
+  const defaultMinister = { id: '', name: '', gender: '男', church: '', ministry: '', phone: '', situation: '', status: '持續關懷中', assignedStaff: '' };
   const [ministerForm, setMinisterForm] = useState(defaultMinister);
   const [importText, setImportText] = useState('');
 
@@ -162,7 +185,7 @@ export default function App() {
 
     ministers.forEach(m => {
       const nextDateStr = getNextDate(m);
-      if (nextDateStr && nextDateStr < today) overdueCount++;
+      if (nextDateStr && nextDateStr < today && m.status !== '停止跟進') overdueCount++;
       if (m.visits) {
         m.visits.forEach((v: any) => {
           const vDate = new Date(v.date);
@@ -251,6 +274,32 @@ export default function App() {
     });
   };
 
+  const handleToggleFollowUp = (id: string, currentStatus: string) => {
+    if (currentStatus !== '停止跟進') {
+      setConfirmDialog({
+        show: true,
+        message: '是否確定停止跟進此兄姊？',
+        onConfirm: () => {
+          const updated = ministers.map(m => m.id === id ? { ...m, status: '停止跟進' } : m);
+          updateData(updated);
+          setConfirmDialog({ show: false, message: '', onConfirm: null });
+        }
+      });
+    } else {
+      const updated = ministers.map(m => m.id === id ? { ...m, status: '持續關懷中' } : m);
+      updateData(updated);
+    }
+  };
+
+  const handleSaveAssign = (e: any) => {
+    e.preventDefault();
+    const updated = ministers.map(m => 
+      m.id === assignModal.ministerId ? { ...m, assignedStaff: assignModal.staffName.trim() } : m
+    );
+    updateData(updated);
+    setAssignModal({ show: false, ministerId: '', staffName: '' });
+  };
+
   const handleImport = () => {
     try {
       setImportError('');
@@ -260,8 +309,8 @@ export default function App() {
       const newEntries = lines.map(line => {
         const parts = line.split(',');
         if (parts.length < 4) throw new Error('欄位不足');
-        const [name, church, ministry, phone, gender = '男'] = parts.map(p => p.trim());
-        return { id: Math.random().toString(36).substr(2, 9), name, church, ministry, phone, gender, status: '持續關懷中', visits: [] };
+        const [name, church, ministry, phone, gender = '男', situation = ''] = parts.map(p => p.trim());
+        return { id: Math.random().toString(36).substr(2, 9), name, church, ministry, phone, gender, situation, status: '持續關懷中', assignedStaff: '', visits: [] };
       });
 
       updateData([...ministers, ...newEntries]);
@@ -277,19 +326,24 @@ export default function App() {
       <header className="bg-teal-800 text-white p-4 shadow-lg sticky top-0 z-40">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <HeartHandshake className="w-6 h-6 text-teal-300" />
-            <h1 className="text-xl font-bold flex items-center gap-2 text-white">
-              宣道堂帶職傳道關懷系統
-              {isSuperAdmin && (
-                <span className="bg-amber-500 text-xs text-white px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm font-medium tracking-wide">
-                  <ShieldAlert size={12} /> SUPREME
-                </span>
-              )}
+            <HeartHandshake className="w-6 h-6 text-teal-300 shrink-0" />
+            <h1 className="text-xl font-bold flex flex-wrap items-center gap-1.5 text-white">
+              <span>宣道堂帶職傳道</span>
+              <span className="flex items-center gap-2">關懷系統
+                {isSuperAdmin && (
+                  <span className="bg-amber-500 text-xs text-white px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm font-medium tracking-wide">
+                    <ShieldAlert size={12} /> SUPREME
+                  </span>
+                )}
+              </span>
             </h1>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {isSyncing && <span className="text-teal-200 text-xs flex items-center mr-1 animate-pulse"><RefreshCw size={12} className="animate-spin" /></span>}
-            <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="p-2 hover:bg-teal-700 rounded-full transition-colors" title="開啟雲端試算表">
+            <button onClick={() => { setViewMode(viewMode === 'matching' ? 'overview' : 'matching'); setSelectedId(null); }} className={`p-2 rounded-full transition-colors ${viewMode === 'matching' ? 'bg-teal-900 text-teal-300' : 'hover:bg-teal-700 text-white'}`} title="跟進同工配對">
+              <UserCog size={20} />
+            </button>
+            <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="p-2 hover:bg-teal-700 rounded-full transition-colors hidden sm:block" title="開啟雲端試算表">
               <Table size={20} className="text-white" />
             </button>
             <button onClick={handleShare} className="p-2 hover:bg-teal-700 rounded-full transition-colors" title="分享系統連結">
@@ -306,7 +360,95 @@ export default function App() {
       </header>
 
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 pb-24">
-        {!selectedId ? (
+        {viewMode === 'matching' ? (
+          <div className="animate-in fade-in duration-300">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <UserCog className="text-teal-600" /> 跟進同工登記配對
+              </h2>
+              <button onClick={() => setViewMode('overview')} className="text-teal-600 text-sm font-bold flex items-center gap-1 hover:text-teal-800">
+                返回總覽 <ChevronRight size={16} />
+              </button>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-5">
+              <div className="p-4 bg-slate-50 border-b border-slate-200">
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text" placeholder="搜尋姓名、堂會尋找配對對象..."
+                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                    value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm overflow-x-auto pb-1 scrollbar-hide">
+                  <span className="text-slate-500 font-medium flex items-center gap-1 shrink-0"><Filter size={14} /> 狀態:</span>
+                  <button onClick={() => setMatchFilter('all')} className={`px-3 py-1 rounded-full whitespace-nowrap transition-colors ${matchFilter === 'all' ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-700'}`}>全部</button>
+                  <button onClick={() => setMatchFilter('unassigned')} className={`px-3 py-1 rounded-full whitespace-nowrap transition-colors ${matchFilter === 'unassigned' ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-700'}`}>未指派</button>
+                  <button onClick={() => setMatchFilter('assigned')} className={`px-3 py-1 rounded-full whitespace-nowrap transition-colors ${matchFilter === 'assigned' ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-700'}`}>已指派</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 relative min-h-[200px]">
+              {isLoading && (
+                <div className="absolute inset-0 bg-slate-50/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center py-12">
+                  <RefreshCw className="w-8 h-8 text-teal-500 animate-spin mb-3" />
+                  <span className="text-sm font-bold text-teal-700 tracking-wider">正在同步雲端資料...</span>
+                </div>
+              )}
+              {processedMinisters.filter(m => {
+                if (matchFilter === 'unassigned') return !m.assignedStaff;
+                if (matchFilter === 'assigned') return !!m.assignedStaff;
+                return true;
+              }).map(m => {
+                const isStopped = m.status === '停止跟進';
+                return (
+                  <div key={m.id} className={`bg-white p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${isStopped ? 'opacity-50 grayscale border-slate-200 bg-slate-50' : 'border-slate-100 hover:shadow-md'}`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-sm border-2 ${getChurchColor(m.church)}`}>
+                        {m.church ? m.church.charAt(0) : '?'}
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="font-bold text-slate-800 text-[16px] mb-0.5">
+                          {m.name}
+                          {isStopped && <span className="ml-2 text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">停止跟進</span>}
+                        </div>
+                        <div className="text-xs text-slate-500 font-medium mb-1">
+                          {m.church} {m.ministry && <span className="text-slate-300 mx-1">|</span>} {m.ministry}
+                        </div>
+                        {/* 呈現現況在配對列表中 */}
+                        {m.situation && (
+                          <div className="text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-[200px] truncate" title={m.situation}>
+                            現況: {m.situation}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 justify-end">
+                      {m.assignedStaff ? (
+                        <button onClick={() => setAssignModal({ show: true, ministerId: m.id, staffName: m.assignedStaff })} className="bg-teal-50 text-teal-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-teal-100 text-sm font-bold hover:bg-teal-100 transition-colors">
+                          <Users size={14} /> {m.assignedStaff} <Edit size={12} className="opacity-50" />
+                        </button>
+                      ) : (
+                        <button onClick={() => setAssignModal({ show: true, ministerId: m.id, staffName: '' })} className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-slate-200 transition-colors shadow-sm border border-slate-200">
+                          <PlusCircle size={14} /> 登記配對
+                        </button>
+                      )}
+                      
+                      <button onClick={() => { setViewMode('overview'); setSelectedId(m.id); }} className="bg-teal-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-teal-700 transition-colors shadow-sm">
+                        <ClipboardEdit size={14} /> 登記探訪
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {!isLoading && processedMinisters.length === 0 && (
+                <div className="text-center py-10 text-slate-500">找不到符合條件的名單</div>
+              )}
+            </div>
+          </div>
+        ) : !selectedId ? (
           <div className="animate-in fade-in duration-300">
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
@@ -357,17 +499,19 @@ export default function App() {
                 const nextDate = getNextDate(m);
                 const isoverdue = nextDate && nextDate < today;
                 const isToday = nextDate === today;
+                const isStopped = m.status === '停止跟進';
 
                 return (
-                  <div key={m.id} onClick={() => setSelectedId(m.id)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer active:scale-[0.98] hover:shadow-md transition-all">
+                  <div key={m.id} onClick={() => setSelectedId(m.id)} className={`p-4 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isStopped ? 'bg-slate-50 opacity-50 grayscale border border-slate-200 rounded-xl' : 'bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md'} ${isoverdue && !isStopped ? 'border-l-4 border-l-red-500 bg-red-50/30' : isToday && !isStopped ? 'border-l-4 border-l-orange-500' : ''}`}>
                     <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg border-2 ${getChurchColor(m.church)}`}>
+                      <div className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg border-2 ${isoverdue && !isStopped ? 'bg-red-100 text-red-700 border-red-200' : getChurchColor(m.church)}`}>
                         {m.church ? m.church.charAt(0) : '?'}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="font-bold text-slate-800 text-[17px]">{m.name}</span>
-                          {isoverdue && <AlertCircle size={14} className="text-red-500" />}
+                          {isoverdue && !isStopped && <AlertCircle size={14} className="text-red-500" />}
+                          {isStopped && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">停止跟進</span>}
                         </div>
                         <div className="text-xs text-slate-500 font-medium">
                           {m.church} {m.ministry && <span className="text-slate-300 mx-1">|</span>} {m.ministry}
@@ -377,7 +521,14 @@ export default function App() {
 
                     <div className="flex flex-col items-end gap-1.5">
                       <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">已探訪 {m.visits?.length || 0} 次</span>
-                      <div className={`text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1 ${!nextDate ? 'text-slate-400 bg-slate-50' : isoverdue ? 'text-white bg-red-500 shadow-sm' : isToday ? 'text-white bg-orange-500 shadow-sm' : 'text-teal-700 bg-teal-50'}`}>
+                      
+                      {m.assignedStaff && (
+                        <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border border-amber-200 shadow-sm">
+                          <Users size={12} /> {m.assignedStaff}
+                        </span>
+                      )}
+                      
+                      <div className={`text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1 mt-0.5 ${!nextDate ? 'text-slate-400 bg-slate-50' : isoverdue ? 'text-white bg-red-500 shadow-sm' : isToday ? 'text-white bg-orange-500 shadow-sm' : 'text-teal-700 bg-teal-50'}`}>
                         {nextDate ? `跟進: ${nextDate}` : '未設定跟進'}
                       </div>
                     </div>
@@ -394,11 +545,21 @@ export default function App() {
           </div>
         ) : (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-300 pb-10">
-            <button onClick={() => setSelectedId(null)} className="text-teal-700 font-bold flex items-center gap-1 hover:text-teal-900 transition-colors mb-2">
-              <ChevronRight className="rotate-180 w-5 h-5" /> 返回名單總覽
-            </button>
+            <div className="flex justify-between items-center mb-2">
+              <button onClick={() => setSelectedId(null)} className="text-teal-700 font-bold flex items-center gap-1 hover:text-teal-900 transition-colors">
+                <ChevronRight className="rotate-180 w-5 h-5" /> 返回名單總覽
+              </button>
+              
+              <button 
+                onClick={() => handleToggleFollowUp(selectedMinister.id, selectedMinister.status)} 
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-1 ${selectedMinister.status === '停止跟進' ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'}`}
+              >
+                {selectedMinister.status === '停止跟進' ? <RefreshCw size={14} /> : <AlertCircle size={14} />}
+                {selectedMinister.status === '停止跟進' ? '重新跟進' : '停止跟進'}
+              </button>
+            </div>
 
-            <div className="bg-white rounded-2xl shadow-md border border-teal-100 overflow-hidden relative">
+            <div className={`bg-white rounded-2xl shadow-md border border-teal-100 overflow-hidden relative transition-all duration-300 ${selectedMinister.status === '停止跟進' ? 'opacity-60 grayscale' : ''}`}>
               {isSuperAdmin && (
                 <div className="absolute top-4 right-4 flex gap-2 z-10">
                   <button onClick={() => { setMinisterForm(selectedMinister); setShowMinisterModal(true); }} className="bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition-colors backdrop-blur-sm" title="編輯對象"><Edit size={16} /></button>
@@ -408,13 +569,16 @@ export default function App() {
 
               <div className="bg-teal-700 p-6 text-white pt-8">
                 <div className="flex justify-between items-start gap-3">
-                  {/* 加入 text-left 強制文字靠左對齊 */}
                   <div className="flex-1 min-w-0 text-left">
                     <h2 className="text-3xl font-bold mb-1 text-white truncate">{selectedMinister.name}</h2>
-                    {/* 加入 justify-start 強制元素靠左排列 */}
                     <p className="opacity-90 flex items-center justify-start gap-2 mt-2">
                       <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm whitespace-nowrap shrink-0">{selectedMinister.gender}</span>
                       <span className="whitespace-nowrap">已探訪 {selectedMinister.visits ? selectedMinister.visits.length : 0} 次</span>
+                      {selectedMinister.assignedStaff && (
+                        <span className="bg-amber-500/90 px-2 py-0.5 rounded-full text-sm whitespace-nowrap flex items-center gap-1 shadow-sm">
+                          <Users size={12} /> {selectedMinister.assignedStaff} 跟進
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end">
@@ -463,14 +627,22 @@ export default function App() {
                 </div>
                 <div className="flex items-center justify-between md:justify-end gap-4">
                   <span className="text-slate-400">目前狀態:</span>
-                  <span className="px-3 py-1 bg-teal-100 text-teal-800 text-xs rounded-full font-bold">
+                  <span className={`px-3 py-1 text-xs rounded-full font-bold ${selectedMinister.status === '停止跟進' ? 'bg-slate-200 text-slate-500' : 'bg-teal-100 text-teal-800'}`}>
                     {selectedMinister.status || '持續關懷中'}
                   </span>
                 </div>
               </div>
+
+              {/* 新增：顯示現況區塊 */}
+              {selectedMinister.situation && (
+                <div className="px-5 pb-5 bg-slate-50 border-b border-slate-100">
+                  <div className="text-xs font-bold text-slate-400 mb-1">現況與背景:</div>
+                  <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{selectedMinister.situation}</div>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-4">
+            <div className={`space-y-4 ${selectedMinister.status === '停止跟進' ? 'opacity-60 grayscale transition-all duration-300' : ''}`}>
               <div className="flex justify-between items-center px-1">
                 <h3 className="font-bold text-slate-700 flex items-center gap-2"><ClipboardList size={18} /> 探訪紀錄歷程</h3>
                 {!showVisitForm && (
@@ -580,7 +752,7 @@ export default function App() {
               <span>{ministerForm.id ? '編輯對象資料' : '新增關懷對象'}</span>
               <button onClick={() => setShowMinisterModal(false)} className="hover:text-teal-200 transition-colors">X</button>
             </div>
-            <form onSubmit={handleSaveMinister} className="p-6 space-y-4">
+            <form onSubmit={handleSaveMinister} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-xs font-bold text-slate-500 mb-1 block">姓名</label><input required value={ministerForm.name} onChange={e => setMinisterForm({ ...ministerForm, name: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" /></div>
                 <div><label className="text-xs font-bold text-slate-500 mb-1 block">性別</label><select value={ministerForm.gender} onChange={e => setMinisterForm({ ...ministerForm, gender: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none"><option value="男">男</option><option value="女">女</option></select></div>
@@ -589,7 +761,23 @@ export default function App() {
                 <div><label className="text-xs font-bold text-slate-500 mb-1 block">所屬堂會</label><input required value={ministerForm.church} onChange={e => setMinisterForm({ ...ministerForm, church: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" placeholder="例如: 總堂" /></div>
                 <div><label className="text-xs font-bold text-slate-500 mb-1 block">所屬事工</label><input value={ministerForm.ministry} onChange={e => setMinisterForm({ ...ministerForm, ministry: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" placeholder="例如: 學生事工" /></div>
               </div>
-              <div><label className="text-xs font-bold text-slate-500 mb-1 block">聯絡電話</label><input required value={ministerForm.phone} onChange={e => setMinisterForm({ ...ministerForm, phone: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-xs font-bold text-slate-500 mb-1 block">聯絡電話</label><input required value={ministerForm.phone} onChange={e => setMinisterForm({ ...ministerForm, phone: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" /></div>
+                <div><label className="text-xs font-bold text-slate-500 mb-1 block">跟進同工</label><input value={ministerForm.assignedStaff || ''} onChange={e => setMinisterForm({ ...ministerForm, assignedStaff: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" /></div>
+              </div>
+              
+              {/* 新增：現況欄位 */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">現況與背景 (選填)</label>
+                <textarea 
+                  rows={2} 
+                  value={ministerForm.situation || ''} 
+                  onChange={e => setMinisterForm({ ...ministerForm, situation: e.target.value })} 
+                  className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" 
+                  placeholder="例如：剛轉職、近期抱恙..." 
+                />
+              </div>
+
               {isSuperAdmin && ministerForm.id && (
                 <div><label className="text-xs font-bold text-slate-500 mb-1 block">狀態 (Super Admin 特權)</label><input required value={ministerForm.status} onChange={e => setMinisterForm({ ...ministerForm, status: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none bg-amber-50" /></div>
               )}
@@ -611,12 +799,40 @@ export default function App() {
               <div className="text-xs text-slate-600 bg-slate-100 p-3 rounded-lg border border-slate-200 leading-relaxed">
                 您可以直接從 Excel 或 Google Sheets 複製資料並貼在下方。<br />
                 每行代表一位對象，請使用逗號分隔，順序為：<br />
-                <span className="font-mono font-bold text-teal-700">姓名, 堂會, 事工, 電話, 性別(選填)</span>
+                <span className="font-mono font-bold text-teal-700">姓名, 堂會, 事工, 電話, 性別(選填), 現況(選填)</span>
               </div>
               {importError && <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200 flex items-center gap-1"><AlertCircle size={14} /> {importError}</div>}
-              <textarea rows={6} value={importText} onChange={e => setImportText(e.target.value)} className="w-full p-3 border rounded-md border-slate-300 text-sm font-mono focus:ring-2 focus:ring-slate-500 outline-none" placeholder="陳大文, 總堂, 學生事工, 66123456, 男&#10;張小玲, 閩南堂, 詩班, 66654321, 女"></textarea>
+              <textarea rows={6} value={importText} onChange={e => setImportText(e.target.value)} className="w-full p-3 border rounded-md border-slate-300 text-sm font-mono focus:ring-2 focus:ring-slate-500 outline-none" placeholder="陳大文, 總堂, 學生事工, 66123456, 男, 剛畢業&#10;張小玲, 閩南堂, 詩班, 66654321, 女"></textarea>
               <button onClick={handleImport} className="w-full bg-slate-800 text-white py-3 rounded-lg font-bold hover:bg-slate-900 transition-colors">開始匯入</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 配對同工設定彈窗 */}
+      {assignModal.show && (
+        <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 p-6">
+            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+              <UserCog className="text-teal-600" /> 登記跟進人員
+            </h3>
+            <form onSubmit={handleSaveAssign}>
+              <label className="text-sm font-bold text-slate-500 mb-2 block">
+                請輸入跟進同工的中文全名：
+              </label>
+              <input
+                type="text"
+                autoFocus
+                placeholder="請輸入跟進同工的中文全名 (留空代表取消指派)"
+                className="w-full p-3 border-2 border-teal-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none mb-5 font-bold text-teal-900"
+                value={assignModal.staffName}
+                onChange={e => setAssignModal({ ...assignModal, staffName: e.target.value })}
+              />
+              <div className="flex gap-3 justify-end">
+                <button type="button" onClick={() => setAssignModal({ show: false, ministerId: '', staffName: '' })} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors">取消</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 font-bold shadow-sm transition-colors">儲存配對</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
