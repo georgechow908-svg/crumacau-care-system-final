@@ -8,45 +8,45 @@ import {
 
 const GOOGLE_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxrf_7APMtfzqUdCvJdE54PgE4vofvRui4AJ9S34o25DpLpdoB_0_uhtnZrqtvvtr48g/exec';
 
-// 請將下方網址換成您真實的 Google Sheet 網址
-const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1lj2hc3PwI8e6-qbCpaGhkV-cWMVnJ6lESZlrChUS0Zw/edit?usp=sharing';
+const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Zt97D2VwI_k5zQf2E-Z5d-8T-88J8E8t1C6B0z_C_pI/edit';
 
-// 嚴格綁定堂會顏色
 const getChurchColor = (churchName: string) => {
-  if (!churchName) return 'bg-slate-100 text-slate-700 border-slate-200'; // 預設顏色
-
-  // 移除堂會名稱中的空格以利精準比對
-  const normalizedName = churchName.trim();
-
+  const normalizedName = churchName?.trim();
   switch (normalizedName) {
-    case '總堂':
-      return 'bg-purple-100 text-purple-700 border-purple-200'; // 紫
-    case '潮州堂':
-      return 'bg-orange-100 text-orange-700 border-orange-200'; // 橙
-    case '新口岸堂':
-      return 'bg-blue-100 text-blue-700 border-blue-200'; // 藍
-    case '閩南堂':
-      return 'bg-green-100 text-green-700 border-green-200'; // 綠
-    case '下環堂':
-      return 'bg-red-100 text-red-700 border-red-200'; // 紅
-    case '沙梨頭堂':
-      return 'bg-cyan-100 text-cyan-700 border-cyan-200'; // 青 (Cyan 接近青色)
-    case '筷子基堂':
-      return 'bg-yellow-100 text-yellow-700 border-yellow-200'; // 黃
-    case '氹仔堂':
-      return 'bg-stone-100 text-stone-700 border-stone-200'; // 啡 (Stone 提供良好的咖啡/卡其色系)
-    case '建華堂':
-      return 'bg-indigo-100 text-indigo-700 border-indigo-200'; // 深藍 (Indigo)
-    case '新橋堂':
-      return 'bg-amber-100 text-amber-700 border-amber-200'; // 橙黃 (Amber)
-    case '北區堂':
-      return 'bg-gray-100 text-gray-700 border-gray-200'; // 灰
-    case '祐漢堂':
-      return 'bg-yellow-50 text-yellow-600 border-yellow-300'; // 金 (微調黃色使其帶有金色質感)
-    default:
-      // 如果遇到未在名單內的堂會，提供一個備用顏色
-      return 'bg-teal-100 text-teal-700 border-teal-200'; 
+    case '總堂': return 'bg-purple-100 text-purple-700 border-purple-200';
+    case '潮州堂': return 'bg-orange-100 text-orange-700 border-orange-200';
+    case '新口岸堂': return 'bg-blue-100 text-blue-700 border-blue-200';
+    case '閩南堂': return 'bg-green-100 text-green-700 border-green-200';
+    case '下環堂': return 'bg-red-100 text-red-700 border-red-200';
+    case '沙梨頭堂': return 'bg-teal-100 text-teal-700 border-teal-200';
+    case '筷子基堂': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    case '氹仔堂': return 'bg-stone-100 text-stone-700 border-stone-200';
+    case '建華堂': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+    case '新橋堂': return 'bg-amber-100 text-amber-700 border-amber-200';
+    case '北區堂': return 'bg-slate-100 text-slate-700 border-slate-200';
+    case '祐漢堂': return 'bg-yellow-50 text-yellow-600 border-yellow-300';
+    default: return 'bg-cyan-100 text-cyan-700 border-cyan-200'; 
   }
+};
+
+const getChurchCode = (churchName: string) => {
+  const mapping: Record<string, string> = {
+    '總堂': '01', '潮州堂': '02', '新口岸堂': '03', '閩南堂': '04',
+    '氹仔堂': '05', '建華堂': '06', '下環堂': '07', '沙梨頭堂': '08',
+    '筷子基堂': '09', '新橋堂': '10', '北區堂': '11', '祐漢堂': '12'
+  };
+  return mapping[churchName?.trim()] || '99';
+};
+
+const generateMemberNumber = (churchName: string, existingList: any[]) => {
+  const code = getChurchCode(churchName);
+  const sameChurch = existingList.filter(m => m.church === churchName && m.memberNumber?.startsWith(`${code}-`));
+  let max = 0;
+  sameChurch.forEach(m => {
+    const num = parseInt(m.memberNumber.split('-')[1], 10);
+    if (!isNaN(num) && num > max) max = num;
+  });
+  return `${code}-${String(max + 1).padStart(3, '0')}`;
 };
 
 export default function App() {
@@ -71,8 +71,7 @@ export default function App() {
 
   const isMobileDevice = typeof window !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent);
 
-  // 新增了 situation (現況) 欄位
-  const defaultMinister = { id: '', name: '', gender: '男', church: '', ministry: '', phone: '', situation: '', status: '持續關懷中', assignedStaff: '' };
+  const defaultMinister = { id: '', memberNumber: '', name: '', gender: '男', church: '', ministry: '', phone: '', situation: '', status: '持續關懷中', assignedStaff: '' };
   const [ministerForm, setMinisterForm] = useState(defaultMinister);
   const [importText, setImportText] = useState('');
 
@@ -170,7 +169,7 @@ export default function App() {
     const endHour = String((parseInt(timeStr.substring(0, 2)) + 1) % 24).padStart(2, '0');
     const end = `${dateStr}T${endHour}${timeStr.substring(2)}`;
     const title = encodeURIComponent(`探訪跟進: ${minister.name}`);
-    const details = encodeURIComponent(`對象: ${minister.name}\n堂會: ${minister.church}\n電話: ${minister.phone}\n\n上次探訪紀錄:\n${visit.notes}`);
+    const details = encodeURIComponent(`對象: ${minister.name}\n編號: ${minister.memberNumber}\n堂會: ${minister.church}\n電話: ${minister.phone}\n\n上次探訪紀錄:\n${visit.notes}`);
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}`;
   };
 
@@ -200,7 +199,8 @@ export default function App() {
     let filtered = ministers.filter(m =>
       m.name.includes(searchQuery) ||
       m.church.includes(searchQuery) ||
-      (m.ministry && m.ministry.includes(searchQuery))
+      (m.ministry && m.ministry.includes(searchQuery)) ||
+      (m.memberNumber && m.memberNumber.includes(searchQuery))
     );
 
     return filtered.sort((a, b) => {
@@ -222,9 +222,12 @@ export default function App() {
     e.preventDefault();
     let updated;
     if (ministerForm.id) {
+      // 若編輯時沒有編號，順手補齊
+      if (!ministerForm.memberNumber) ministerForm.memberNumber = generateMemberNumber(ministerForm.church, ministers);
       updated = ministers.map(m => m.id === ministerForm.id ? { ...m, ...ministerForm } : m);
     } else {
-      updated = [...ministers, { ...ministerForm, id: Date.now().toString(), visits: [] }];
+      const memberNumber = generateMemberNumber(ministerForm.church, ministers);
+      updated = [...ministers, { ...ministerForm, id: Date.now().toString(), memberNumber, visits: [] }];
     }
     updateData(updated);
     setShowMinisterModal(false);
@@ -306,14 +309,16 @@ export default function App() {
       const lines = importText.split('\n').filter(l => l.trim().length > 0);
       if (lines.length === 0) throw new Error('沒有偵測到資料');
 
-      const newEntries = lines.map(line => {
+      let currentList = [...ministers];
+      lines.forEach(line => {
         const parts = line.split(',');
         if (parts.length < 4) throw new Error('欄位不足');
         const [name, church, ministry, phone, gender = '男', situation = ''] = parts.map(p => p.trim());
-        return { id: Math.random().toString(36).substr(2, 9), name, church, ministry, phone, gender, situation, status: '持續關懷中', assignedStaff: '', visits: [] };
+        const memberNumber = generateMemberNumber(church, currentList);
+        currentList.push({ id: Math.random().toString(36).substr(2, 9), memberNumber, name, church, ministry, phone, gender, situation, status: '持續關懷中', assignedStaff: '', visits: [] });
       });
 
-      updateData([...ministers, ...newEntries]);
+      updateData(currentList);
       setShowImportModal(false);
       setImportText('');
     } catch (e) {
@@ -376,7 +381,7 @@ export default function App() {
                 <div className="relative mb-3">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                   <input
-                    type="text" placeholder="搜尋姓名、堂會尋找配對對象..."
+                    type="text" placeholder="搜尋編號、姓名、堂會..."
                     className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                     value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -410,14 +415,14 @@ export default function App() {
                         {m.church ? m.church.charAt(0) : '?'}
                       </div>
                       <div className="flex flex-col">
-                        <div className="font-bold text-slate-800 text-[16px] mb-0.5">
+                        <div className="font-bold text-slate-800 text-[16px] mb-0.5 flex items-center gap-1.5">
+                          {m.memberNumber && <span className="font-mono text-xs text-slate-400">#{m.memberNumber}</span>}
                           {m.name}
                           {isStopped && <span className="ml-2 text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">停止跟進</span>}
                         </div>
                         <div className="text-xs text-slate-500 font-medium mb-1">
                           {m.church} {m.ministry && <span className="text-slate-300 mx-1">|</span>} {m.ministry}
                         </div>
-                        {/* 呈現現況在配對列表中 */}
                         {m.situation && (
                           <div className="text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-[200px] truncate" title={m.situation}>
                             現況: {m.situation}
@@ -432,7 +437,7 @@ export default function App() {
                         </button>
                       ) : (
                         <button onClick={() => setAssignModal({ show: true, ministerId: m.id, staffName: '' })} className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-slate-200 transition-colors shadow-sm border border-slate-200">
-                          <PlusCircle size={14} /> 登記配對
+                          <PlusCircle size={14} /> 登記配配
                         </button>
                       )}
                       
@@ -472,7 +477,7 @@ export default function App() {
                 <div className="relative mb-3">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                   <input
-                    type="text" placeholder="搜尋姓名、堂會、或事工..."
+                    type="text" placeholder="搜尋編號、姓名、堂會..."
                     className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                     value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -509,7 +514,10 @@ export default function App() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-bold text-slate-800 text-[17px]">{m.name}</span>
+                          <span className="font-bold text-slate-800 text-[17px] flex items-center gap-1.5">
+                            {m.memberNumber && <span className="font-mono text-xs text-slate-400">#{m.memberNumber}</span>}
+                            {m.name}
+                          </span>
                           {isoverdue && !isStopped && <AlertCircle size={14} className="text-red-500" />}
                           {isStopped && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">停止跟進</span>}
                         </div>
@@ -570,7 +578,10 @@ export default function App() {
               <div className="bg-teal-700 p-6 text-white pt-8">
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex-1 min-w-0 text-left">
-                    <h2 className="text-3xl font-bold mb-1 text-white truncate">{selectedMinister.name}</h2>
+                    <h2 className="text-3xl font-bold mb-1 text-white truncate flex items-center gap-2">
+                      {selectedMinister.name}
+                      {selectedMinister.memberNumber && <span className="font-mono text-sm bg-white/20 px-2 py-0.5 rounded-md opacity-80 shrink-0">#{selectedMinister.memberNumber}</span>}
+                    </h2>
                     <p className="opacity-90 flex items-center justify-start gap-2 mt-2">
                       <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm whitespace-nowrap shrink-0">{selectedMinister.gender}</span>
                       <span className="whitespace-nowrap">已探訪 {selectedMinister.visits ? selectedMinister.visits.length : 0} 次</span>
@@ -633,7 +644,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 新增：顯示現況區塊 */}
               {selectedMinister.situation && (
                 <div className="px-5 pb-5 bg-slate-50 border-b border-slate-100">
                   <div className="text-xs font-bold text-slate-400 mb-1">現況與背景:</div>
@@ -766,7 +776,6 @@ export default function App() {
                 <div><label className="text-xs font-bold text-slate-500 mb-1 block">跟進同工</label><input value={ministerForm.assignedStaff || ''} onChange={e => setMinisterForm({ ...ministerForm, assignedStaff: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" /></div>
               </div>
               
-              {/* 新增：現況欄位 */}
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">現況與背景 (選填)</label>
                 <textarea 
