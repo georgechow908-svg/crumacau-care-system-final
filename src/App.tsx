@@ -412,7 +412,7 @@ export default function App() {
                   <div key={m.id} className={`bg-white p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${isStopped ? 'opacity-50 grayscale border-slate-200 bg-slate-50' : 'border-slate-100 hover:shadow-md'}`}>
                     <div className="flex items-start gap-3">
                       <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-sm border-2 ${getChurchColor(m.church)}`}>
-                        {m.church ? m.church.charAt(0) : '?'}
+                        {m.church?.includes('新口岸') ? '岸' : (m.church ? m.church.charAt(0) : '?')}
                       </div>
                       <div className="flex flex-col">
                         <div className="font-bold text-slate-800 text-[16px] mb-0.5 flex items-center gap-1.5">
@@ -437,7 +437,7 @@ export default function App() {
                         </button>
                       ) : (
                         <button onClick={() => setAssignModal({ show: true, ministerId: m.id, staffName: '' })} className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-slate-200 transition-colors shadow-sm border border-slate-200">
-                          <PlusCircle size={14} /> 登記配配
+                          <PlusCircle size={14} /> 登記配對
                         </button>
                       )}
                       
@@ -510,7 +510,7 @@ export default function App() {
                   <div key={m.id} onClick={() => setSelectedId(m.id)} className={`p-4 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isStopped ? 'bg-slate-50 opacity-50 grayscale border border-slate-200 rounded-xl' : 'bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md'} ${isoverdue && !isStopped ? 'border-l-4 border-l-red-500 bg-red-50/30' : isToday && !isStopped ? 'border-l-4 border-l-orange-500' : ''}`}>
                     <div className="flex items-center gap-3">
                       <div className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg border-2 ${isoverdue && !isStopped ? 'bg-red-100 text-red-700 border-red-200' : getChurchColor(m.church)}`}>
-                        {m.church ? m.church.charAt(0) : '?'}
+                        {m.church?.includes('新口岸') ? '岸' : (m.church ? m.church.charAt(0) : '?')}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
