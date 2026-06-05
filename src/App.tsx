@@ -222,7 +222,6 @@ export default function App() {
     e.preventDefault();
     let updated;
     if (ministerForm.id) {
-      // 若編輯時沒有編號，順手補齊
       if (!ministerForm.memberNumber) ministerForm.memberNumber = generateMemberNumber(ministerForm.church, ministers);
       updated = ministers.map(m => m.id === ministerForm.id ? { ...m, ...ministerForm } : m);
     } else {
@@ -348,7 +347,8 @@ export default function App() {
             <button onClick={() => { setViewMode(viewMode === 'matching' ? 'overview' : 'matching'); setSelectedId(null); }} className={`p-2 rounded-full transition-colors ${viewMode === 'matching' ? 'bg-teal-900 text-teal-300' : 'hover:bg-teal-700 text-white'}`} title="跟進同工配對">
               <UserCog size={20} />
             </button>
-            <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="p-2 hover:bg-teal-700 rounded-full transition-colors hidden sm:block" title="開啟雲端試算表">
+            {/* 這裡把 hidden sm:block 移除了！現在手機也能看到了！ */}
+            <button onClick={() => window.open(GOOGLE_SHEET_URL, '_blank')} className="p-2 hover:bg-teal-700 rounded-full transition-colors" title="開啟雲端試算表">
               <Table size={20} className="text-white" />
             </button>
             <button onClick={handleShare} className="p-2 hover:bg-teal-700 rounded-full transition-colors" title="分享系統連結">
