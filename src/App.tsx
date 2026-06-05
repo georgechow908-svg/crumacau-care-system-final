@@ -8,7 +8,7 @@ import {
 
 const GOOGLE_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxrf_7APMtfzqUdCvJdE54PgE4vofvRui4AJ9S34o25DpLpdoB_0_uhtnZrqtvvtr48g/exec';
 
-const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Zt97D2VwI_k5zQf2E-Z5d-8T-88J8E8t1C6B0z_C_pI/edit';
+const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1lj2hc3PwI8e6-qbCpaGhkV-cWMVnJ6lESZlrChUS0Zw/edit?usp=sharing';
 
 const getChurchColor = (churchName: string) => {
   const normalizedName = churchName?.trim();
