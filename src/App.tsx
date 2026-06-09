@@ -136,7 +136,7 @@ export default function App() {
     return `${code}-${String(maxNum + 1).padStart(3, '0')}`;
   };
 
-  const handleShare = () => { /* 略 */ alert('✅ 系統網址請直接複製瀏覽器上方網址。'); };
+  const handleShare = () => { alert('✅ 系統網址請直接複製瀏覽器上方網址。'); };
 
   const getNextDate = (m: any) => {
     if (!m.visits || m.visits.length === 0) return null;
@@ -425,7 +425,7 @@ export default function App() {
                         {groupMembers.map(m => {
                           const isStopped = m.status === '停止跟進';
                           return (
-                            <div key={m.id} className={`bg-white p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${isStopped ? 'opacity-50 grayscale border-slate-200 bg-slate-50' : 'border-slate-100 hover:shadow-md'}`}>
+                            <div key={m.id} onClick={() => { setViewMode('overview'); setSelectedId(m.id); }} className={`bg-white p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition-all active:scale-[0.99] ${isStopped ? 'opacity-50 grayscale border-slate-200 bg-slate-50' : 'border-slate-100 hover:shadow-md hover:border-teal-100'}`}>
                               <div className="flex items-center gap-3 w-full sm:w-auto">
                                 <div className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-sm border-2 ${getChurchColor(m.church)}`}>
                                   {m.church ? (m.church === '新口岸堂' ? '岸' : m.church.charAt(0)) : '?'}
@@ -448,15 +448,15 @@ export default function App() {
                               </div>
                               <div className="flex flex-wrap items-center gap-2 justify-end shrink-0">
                                 {m.assignedStaff ? (
-                                  <button onClick={() => setAssignModal({ show: true, ministerId: m.id, staffName: m.assignedStaff })} className="bg-teal-50 text-teal-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-teal-100 text-sm font-bold hover:bg-teal-100 transition-colors">
+                                  <button onClick={(e) => { e.stopPropagation(); setAssignModal({ show: true, ministerId: m.id, staffName: m.assignedStaff }); }} className="bg-teal-50 text-teal-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-teal-100 text-sm font-bold hover:bg-teal-100 transition-colors">
                                     <Users size={14} /> {m.assignedStaff} <Edit size={12} className="opacity-50" />
                                   </button>
                                 ) : (
-                                  <button onClick={() => setAssignModal({ show: true, ministerId: m.id, staffName: '' })} className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-slate-200 transition-colors shadow-sm border border-slate-200">
+                                  <button onClick={(e) => { e.stopPropagation(); setAssignModal({ show: true, ministerId: m.id, staffName: '' }); }} className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-slate-200 transition-colors shadow-sm border border-slate-200">
                                     <PlusCircle size={14} /> 登記配對
                                   </button>
                                 )}
-                                <button onClick={() => { setViewMode('overview'); setSelectedId(m.id); }} className="bg-teal-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-teal-700 transition-colors shadow-sm">
+                                <button onClick={(e) => { e.stopPropagation(); setViewMode('overview'); setSelectedId(m.id); }} className="bg-teal-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-teal-700 transition-colors shadow-sm">
                                   <ClipboardEdit size={14} /> 登記探訪
                                 </button>
                               </div>
@@ -641,8 +641,16 @@ export default function App() {
                     <p className="opacity-90 flex items-center justify-start gap-2 mt-2">
                       <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm whitespace-nowrap shrink-0">{selectedMinister.gender}</span>
                       <span className="whitespace-nowrap">已探訪 {selectedMinister.visits ? selectedMinister.visits.length : 0} 次</span>
-                      {selectedMinister.assignedStaff && (
-                        <span className="bg-amber-500/90 px-2 py-0.5 rounded-full text-sm whitespace-nowrap flex items-center gap-1 shadow-sm"><Users size={12} /> {selectedMinister.assignedStaff} 跟進</span>
+                      
+                      {/* --- 名片內的「登記配對」與「編輯配對」按鈕 --- */}
+                      {selectedMinister.assignedStaff ? (
+                        <button onClick={() => setAssignModal({ show: true, ministerId: selectedMinister.id, staffName: selectedMinister.assignedStaff })} className="bg-amber-500/90 hover:bg-amber-500 px-2 py-0.5 rounded-full text-sm whitespace-nowrap flex items-center gap-1 shadow-sm transition-colors cursor-pointer">
+                          <Users size={12} /> {selectedMinister.assignedStaff} 跟進 <Edit size={10} className="opacity-70 ml-0.5" />
+                        </button>
+                      ) : (
+                        <button onClick={() => setAssignModal({ show: true, ministerId: selectedMinister.id, staffName: '' })} className="bg-white/20 hover:bg-white/30 text-white px-2.5 py-0.5 rounded-full text-sm whitespace-nowrap flex items-center gap-1 shadow-sm transition-colors border border-white/20">
+                          <PlusCircle size={12} /> 登記配對
+                        </button>
                       )}
                     </p>
                   </div>
