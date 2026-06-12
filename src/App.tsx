@@ -56,7 +56,9 @@ export default function App() {
   
   const [viewMode, setViewMode] = useState<'overview' | 'matching'>('overview');
   const [matchFilter, setMatchFilter] = useState<'all' | 'unassigned' | 'assigned'>('all');
-  const [assignModal, setAssignModal] = useState({ show: false, ministerId: '', staffName: '' });
+  
+  // 新增配對彈窗狀態: 加入 originalName 來判斷是新增還是修改
+  const [assignModal, setAssignModal] = useState({ show: false, ministerId: '', staffName: '', originalName: '' });
 
   // --- 新增的 UI/UX 狀態 ---
   const [activeTab, setActiveTab] = useState<'all' | 'action' | 'none'>('all');
@@ -69,7 +71,7 @@ export default function App() {
   const [showChurchFilter, setShowChurchFilter] = useState(false);
   const [showMinistryFilter, setShowMinistryFilter] = useState(false);
   
-  // 群組展開/摺疊狀態 (預設全為 true = 摺疊)
+  // 群組展開/摺疊狀態
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const isMobileDevice = typeof window !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent);
@@ -121,7 +123,6 @@ export default function App() {
     }
   };
 
-  // --- Helper Functions ---
   const getNextMemberNumber = (churchName: string) => {
     const code = churchCodes[churchName] || '99';
     const churchMembers = ministers.filter(m => m.church === churchName && m.memberNumber);
@@ -135,8 +136,6 @@ export default function App() {
     });
     return `${code}-${String(maxNum + 1).padStart(3, '0')}`;
   };
-
-  const handleShare = () => { alert('✅ 系統網址請直接複製瀏覽器上方網址。'); };
 
   const getNextDate = (m: any) => {
     if (!m.visits || m.visits.length === 0) return null;
@@ -328,11 +327,48 @@ export default function App() {
     } else { updateData(ministers.map(m => m.id === id ? { ...m, status: '持續關懷中' } : m)); }
   };
 
-  const handleSaveAssign = (e: any) => { e.preventDefault(); updateData(ministers.map(m => m.id === assignModal.ministerId ? { ...m, assignedStaff: assignModal.staffName.trim() } : m)); setAssignModal({ show: false, ministerId: '', staffName: '' }); };
+  // --- 多人配對邏輯 ---
+  const handleSaveAssign = (e: any) => { 
+    e.preventDefault(); 
+    updateData(ministers.map(m => {
+      if (m.id !== assignModal.ministerId) return m;
+      
+      let staffs = m.assignedStaff ? m.assignedStaff.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+      const inputName = assignModal.staffName.trim();
+
+      if (assignModal.originalName) {
+        // 修改模式
+        if (!inputName) {
+          staffs = staffs.filter((s: string) => s !== assignModal.originalName);
+        } else {
+          staffs = staffs.map((s: string) => s === assignModal.originalName ? inputName : s);
+        }
+      } else {
+        // 新增模式
+        if (inputName && !staffs.includes(inputName)) {
+          staffs.push(inputName);
+        }
+      }
+
+      return { ...m, assignedStaff: staffs.join(', ') };
+    }));
+    setAssignModal({ show: false, ministerId: '', staffName: '', originalName: '' }); 
+  };
+
+  const handleRemoveAssign = () => {
+    updateData(ministers.map(m => {
+      if (m.id !== assignModal.ministerId) return m;
+      let staffs = m.assignedStaff ? m.assignedStaff.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+      staffs = staffs.filter((s: string) => s !== assignModal.originalName);
+      return { ...m, assignedStaff: staffs.join(', ') };
+    }));
+    setAssignModal({ show: false, ministerId: '', staffName: '', originalName: '' });
+  };
+
   const handleImport = () => { /* 略 */ };
 
   return (
-    <div className={`min-h-screen bg-slate-50 flex flex-col ${(showMinisterModal || showImportModal || confirmDialog.show || showChurchFilter || showMinistryFilter) ? 'overflow-hidden' : ''}`}>
+    <div translate="no" className={`min-h-screen bg-slate-50 flex flex-col ${(showMinisterModal || showImportModal || confirmDialog.show || showChurchFilter || showMinistryFilter) ? 'overflow-hidden' : ''}`}>
       <header className="bg-teal-800 text-white p-4 shadow-lg sticky top-0 z-40">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
@@ -405,7 +441,6 @@ export default function App() {
                 const groupMembers = matchingGroups.groups[groupName];
                 if (!groupMembers || groupMembers.length === 0) return null; 
                 
-                // 預設 true 代表摺疊
                 const isCollapsed = collapsedGroups[groupName] ?? true; 
                 
                 return (
@@ -424,6 +459,8 @@ export default function App() {
                       <div className="space-y-3 mt-3">
                         {groupMembers.map(m => {
                           const isStopped = m.status === '停止跟進';
+                          const staffs = m.assignedStaff ? m.assignedStaff.split(',').map((s:string) => s.trim()).filter(Boolean) : [];
+                          
                           return (
                             <div key={m.id} onClick={() => { setViewMode('overview'); setSelectedId(m.id); }} className={`bg-white p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition-all active:scale-[0.99] ${isStopped ? 'opacity-50 grayscale border-slate-200 bg-slate-50' : 'border-slate-100 hover:shadow-md hover:border-teal-100'}`}>
                               <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -447,15 +484,17 @@ export default function App() {
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2 justify-end shrink-0">
-                                {m.assignedStaff ? (
-                                  <button onClick={(e) => { e.stopPropagation(); setAssignModal({ show: true, ministerId: m.id, staffName: m.assignedStaff }); }} className="bg-teal-50 text-teal-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-teal-100 text-sm font-bold hover:bg-teal-100 transition-colors">
-                                    <Users size={14} /> {m.assignedStaff} <Edit size={12} className="opacity-50" />
-                                  </button>
-                                ) : (
-                                  <button onClick={(e) => { e.stopPropagation(); setAssignModal({ show: true, ministerId: m.id, staffName: '' }); }} className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-slate-200 transition-colors shadow-sm border border-slate-200">
-                                    <PlusCircle size={14} /> 登記配對
-                                  </button>
-                                )}
+                                {/* 渲染多位同工 */}
+                                {staffs.map(staff => (
+                                   <button key={staff} onClick={(e) => { e.stopPropagation(); setAssignModal({ show: true, ministerId: m.id, staffName: staff, originalName: staff }); }} className="bg-teal-50 text-teal-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-teal-100 text-sm font-bold hover:bg-teal-100 transition-colors">
+                                     <Users size={14} /> {staff} <Edit size={12} className="opacity-50" />
+                                   </button>
+                                ))}
+                                {/* 新增按鈕 */}
+                                <button onClick={(e) => { e.stopPropagation(); setAssignModal({ show: true, ministerId: m.id, staffName: '', originalName: '' }); }} className="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-slate-200 transition-colors shadow-sm border border-slate-200">
+                                  <PlusCircle size={14} /> {staffs.length > 0 ? '新增配對' : '登記配對'}
+                                </button>
+                                
                                 <button onClick={(e) => { e.stopPropagation(); setViewMode('overview'); setSelectedId(m.id); }} className="bg-teal-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-bold hover:bg-teal-700 transition-colors shadow-sm">
                                   <ClipboardEdit size={14} /> 登記探訪
                                 </button>
@@ -535,12 +574,10 @@ export default function App() {
                 const groupMembers = processedGroups[groupName];
                 if (!groupMembers || groupMembers.length === 0) return null; 
                 
-                // 預設 true 代表摺疊，如果沒有紀錄也是 true
                 const isCollapsed = collapsedGroups[groupName] ?? true; 
                 
                 return (
                   <div key={groupName} className="mb-4 animate-in slide-in-from-bottom-2 duration-300">
-                    {/* 套用專屬堂會背景色 */}
                     <button onClick={() => toggleGroup(groupName)} className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors active:scale-[0.99] shadow-sm border hover:opacity-80 ${getChurchColor(groupName)}`}>
                       <span className="font-bold flex items-center gap-2">
                         {groupName} 
@@ -558,6 +595,7 @@ export default function App() {
                           const isoverdue = nextDate && nextDate < todayStr;
                           const isToday = nextDate === todayStr;
                           const isStopped = m.status === '停止跟進';
+                          const staffs = m.assignedStaff ? m.assignedStaff.split(',').map((s:string) => s.trim()).filter(Boolean) : [];
 
                           if (cardFormat === 'detailed') {
                             return (
@@ -580,7 +618,13 @@ export default function App() {
                                 </div>
                                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                                   <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">已探訪 {m.visits?.length || 0} 次</span>
-                                  {m.assignedStaff && <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border border-amber-200 shadow-sm"><Users size={12} /> {m.assignedStaff}</span>}
+                                  {staffs.length > 0 && (
+                                    <div className="flex flex-col items-end gap-1">
+                                      {staffs.map(staff => (
+                                        <span key={staff} className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border border-amber-200 shadow-sm"><Users size={10} /> {staff}</span>
+                                      ))}
+                                    </div>
+                                  )}
                                   <div className={`text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1 mt-0.5 ${!nextDate ? 'text-slate-400 bg-slate-50' : isoverdue ? 'text-white bg-red-500 shadow-sm' : isToday ? 'text-white bg-orange-500 shadow-sm' : 'text-teal-700 bg-teal-50'}`}>
                                     {nextDate ? `跟進: ${nextDate}` : '未設定跟進'}
                                   </div>
@@ -641,18 +685,27 @@ export default function App() {
                     <p className="opacity-90 flex items-center justify-start gap-2 mt-2">
                       <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm whitespace-nowrap shrink-0">{selectedMinister.gender}</span>
                       <span className="whitespace-nowrap">已探訪 {selectedMinister.visits ? selectedMinister.visits.length : 0} 次</span>
-                      
-                      {/* --- 名片內的「登記配對」與「編輯配對」按鈕 --- */}
-                      {selectedMinister.assignedStaff ? (
-                        <button onClick={() => setAssignModal({ show: true, ministerId: selectedMinister.id, staffName: selectedMinister.assignedStaff })} className="bg-amber-500/90 hover:bg-amber-500 px-2 py-0.5 rounded-full text-sm whitespace-nowrap flex items-center gap-1 shadow-sm transition-colors cursor-pointer">
-                          <Users size={12} /> {selectedMinister.assignedStaff} 跟進 <Edit size={10} className="opacity-70 ml-0.5" />
-                        </button>
-                      ) : (
-                        <button onClick={() => setAssignModal({ show: true, ministerId: selectedMinister.id, staffName: '' })} className="bg-white/20 hover:bg-white/30 text-white px-2.5 py-0.5 rounded-full text-sm whitespace-nowrap flex items-center gap-1 shadow-sm transition-colors border border-white/20">
-                          <PlusCircle size={12} /> 登記配對
-                        </button>
-                      )}
                     </p>
+                    
+                    {/* --- 獨立一行的配對按鈕區 (解決 UI 重疊) --- */}
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      {(() => {
+                        const staffs = selectedMinister.assignedStaff ? selectedMinister.assignedStaff.split(',').map((s:string) => s.trim()).filter(Boolean) : [];
+                        return (
+                          <>
+                            {staffs.map(staff => (
+                              <button key={staff} onClick={() => setAssignModal({ show: true, ministerId: selectedMinister.id, staffName: staff, originalName: staff })} className="bg-amber-500/90 hover:bg-amber-500 px-2.5 py-1 rounded-full text-sm whitespace-nowrap flex items-center gap-1 shadow-sm transition-colors cursor-pointer">
+                                <Users size={12} /> {staff} 跟進 <Edit size={10} className="opacity-70 ml-0.5" />
+                              </button>
+                            ))}
+                            <button onClick={() => setAssignModal({ show: true, ministerId: selectedMinister.id, staffName: '', originalName: '' })} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-full text-sm whitespace-nowrap flex items-center gap-1 shadow-sm transition-colors border border-white/20">
+                              <PlusCircle size={12} /> {staffs.length > 0 ? '新增配對' : '登記配對'}
+                            </button>
+                          </>
+                        );
+                      })()}
+                    </div>
+
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end">
                     <div className="font-bold text-lg leading-tight">{selectedMinister.church}</div>
@@ -726,10 +779,11 @@ export default function App() {
                     <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">後續跟進建議</label><textarea rows={3} required value={visitForm.notes} onChange={e => setVisitForm({ ...visitForm, notes: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md mt-1 focus:ring-2 focus:ring-teal-500 outline-none" placeholder="紀錄對話重點及下次行動..."></textarea></div>
                     
                     <div className="bg-teal-50 p-4 rounded-lg border border-teal-200 mt-2">
-                      <label className="text-sm font-bold text-teal-800 flex items-center gap-1 mb-2"><CalendarDays size={16} /> 提醒: 下次預計跟進 (必填)</label>
+                      {/* --- 移除了(選填)字眼 --- */}
+                      <label className="text-sm font-bold text-teal-800 flex items-center gap-1 mb-2"><CalendarDays size={16} /> 提醒: 下次預計跟進</label>
                       <div className="flex gap-2">
-                        <input type="date" required value={visitForm.nextFollowUpDate} onChange={(e) => setVisitForm({ ...visitForm, nextFollowUpDate: e.target.value })} className="w-2/3 p-3 border-2 border-teal-400 rounded-md font-bold text-teal-900 focus:ring-2 focus:ring-teal-500 outline-none" />
-                        <input type="time" required value={visitForm.nextFollowUpTime || ''} onChange={(e) => setVisitForm({ ...visitForm, nextFollowUpTime: e.target.value })} className="w-1/3 p-3 border-2 border-teal-400 rounded-md font-bold text-teal-900 focus:ring-2 focus:ring-teal-500 outline-none" />
+                        <input type="date" value={visitForm.nextFollowUpDate} onChange={(e) => setVisitForm({ ...visitForm, nextFollowUpDate: e.target.value })} className="w-2/3 p-3 border-2 border-teal-400 rounded-md font-bold text-teal-900 focus:ring-2 focus:ring-teal-500 outline-none" />
+                        <input type="time" value={visitForm.nextFollowUpTime || ''} onChange={(e) => setVisitForm({ ...visitForm, nextFollowUpTime: e.target.value })} className="w-1/3 p-3 border-2 border-teal-400 rounded-md font-bold text-teal-900 focus:ring-2 focus:ring-teal-500 outline-none" />
                       </div>
                     </div>
                     <button type="submit" className="w-full bg-teal-600 text-white py-3 rounded-lg font-bold text-lg shadow-md hover:bg-teal-700 active:scale-95 transition-all mt-4">{visitForm.id ? '更新紀錄' : '儲存紀錄'}</button>
@@ -743,16 +797,18 @@ export default function App() {
                 ) : (
                   [...selectedMinister.visits].reverse().map((v: any) => (
                     <div key={v.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow relative group">
-                      {isSuperAdmin && (
-                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => {
-                            let reaction = v.reaction, otherReaction = '';
-                            if (!['良好', '一般', '冷淡'].includes(reaction)) { otherReaction = reaction; reaction = '其他'; }
-                            setVisitForm({ ...v, reaction, otherReaction }); setShowVisitForm(true);
-                          }} className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-md transition-colors" title="編輯紀錄"><Edit size={14} /></button>
+                      <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* 將編輯按鈕開放給所有使用者 */}
+                        <button onClick={() => {
+                          let reaction = v.reaction, otherReaction = '';
+                          if (!['良好', '一般', '冷淡'].includes(reaction)) { otherReaction = reaction; reaction = '其他'; }
+                          setVisitForm({ ...v, reaction, otherReaction }); setShowVisitForm(true);
+                        }} className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-md transition-colors" title="編輯紀錄"><Edit size={14} /></button>
+                        {/* 刪除按鈕依然保留給 SuperAdmin */}
+                        {isSuperAdmin && (
                           <button onClick={() => handleDeleteVisit(v.id)} className="bg-red-50 hover:bg-red-100 text-red-600 p-1.5 rounded-md transition-colors" title="刪除紀錄"><Trash2 size={14} /></button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                       <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
                         <div className="flex flex-col"><span className="font-bold text-slate-800 text-lg">{v.date}</span><span className="text-slate-400 text-sm flex items-center gap-1"><Clock size={12} /> {v.time}</span></div>
                         <div className="flex items-center gap-5 pr-10">
@@ -764,7 +820,18 @@ export default function App() {
                         <div><div className="text-xs font-bold text-slate-400 mb-1">跟進內容與建議:</div><div className="text-slate-700 whitespace-pre-wrap leading-relaxed bg-slate-50 p-3 rounded-md border border-slate-100">{v.notes}</div></div>
                         <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-50 border-dashed">
                           <div className="text-xs font-bold text-slate-500">下次預計跟進日期:</div>
-                          {v.nextFollowUpDate ? <div className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">{v.nextFollowUpDate} {v.nextFollowUpTime || '10:00'}</div> : <div className="font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">未設定</div>}
+                          <div className="flex items-center gap-2">
+                            {v.nextFollowUpDate ? <div className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">{v.nextFollowUpDate} {v.nextFollowUpTime || '10:00'}</div> : <div className="font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">未設定</div>}
+                            
+                            {/* 新增專屬的日期修改按鈕 */}
+                            <button onClick={() => {
+                              let reaction = v.reaction, otherReaction = '';
+                              if (!['良好', '一般', '冷淡'].includes(reaction)) { otherReaction = reaction; reaction = '其他'; }
+                              setVisitForm({ ...v, reaction, otherReaction }); setShowVisitForm(true);
+                            }} className="text-teal-600 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 p-1.5 rounded-md transition-colors" title="更改跟進日期">
+                              <Edit size={14} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -864,7 +931,7 @@ export default function App() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-xs font-bold text-slate-500 mb-1 block">聯絡電話</label><input value={ministerForm.phone} onChange={e => setMinisterForm({ ...ministerForm, phone: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" /></div>
-                <div><label className="text-xs font-bold text-slate-500 mb-1 block">跟進同工</label><input value={ministerForm.assignedStaff || ''} onChange={e => setMinisterForm({ ...ministerForm, assignedStaff: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" placeholder="可選填" /></div>
+                <div><label className="text-xs font-bold text-slate-500 mb-1 block">跟進同工</label><input value={ministerForm.assignedStaff || ''} onChange={e => setMinisterForm({ ...ministerForm, assignedStaff: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" placeholder="可填多人,用逗號隔開" /></div>
               </div>
               <div><label className="text-xs font-bold text-slate-500 mb-1 block">現況</label><textarea value={ministerForm.situation || ''} onChange={e => setMinisterForm({ ...ministerForm, situation: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" placeholder="記錄此對象當前狀況..." rows={2}></textarea></div>
               {isSuperAdmin && ministerForm.id && (
@@ -903,23 +970,26 @@ export default function App() {
         <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 p-6">
             <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-              <UserCog className="text-teal-600" /> 登記跟進人員
+              <UserCog className="text-teal-600" /> {assignModal.originalName ? '修改配對人員' : '新增配對人員'}
             </h3>
             <form onSubmit={handleSaveAssign}>
               <label className="text-sm font-bold text-slate-500 mb-2 block">
-                請輸入跟進同工的中文全名：
+                {assignModal.originalName ? `請輸入新的同工全名 (原: ${assignModal.originalName})：` : '請輸入跟進同工的中文全名：'}
               </label>
               <input
                 type="text"
                 autoFocus
-                placeholder="請輸入跟進同工的中文全名"
+                placeholder="例如: 陳牧師"
                 className="w-full p-3 border-2 border-teal-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none mb-5 font-bold text-teal-900"
                 value={assignModal.staffName}
                 onChange={e => setAssignModal({ ...assignModal, staffName: e.target.value })}
               />
-              <div className="flex gap-3 justify-end">
-                <button type="button" onClick={() => setAssignModal({ show: false, ministerId: '', staffName: '' })} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors">取消</button>
-                <button type="submit" className="px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 font-bold shadow-sm transition-colors">儲存配對</button>
+              <div className="flex gap-3 justify-end items-center">
+                {assignModal.originalName && (
+                   <button type="button" onClick={handleRemoveAssign} className="px-4 py-2 rounded-lg text-red-600 bg-red-50 hover:bg-red-100 font-medium transition-colors mr-auto border border-red-100 shadow-sm">取消配對</button>
+                )}
+                <button type="button" onClick={() => setAssignModal({ show: false, ministerId: '', staffName: '', originalName: '' })} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors">取消</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 font-bold shadow-sm transition-colors">儲存</button>
               </div>
             </form>
           </div>
