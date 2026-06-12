@@ -32,7 +32,8 @@ const getChurchColor = (churchName: string) => {
 const churchCodes: Record<string, string> = {
   '總堂': '01', '潮州堂': '02', '新口岸堂': '03', '閩南堂': '04',
   '氹仔堂': '05', '建華堂': '06', '下環堂': '07', '沙梨頭堂': '08',
-  '筷子基堂': '09', '新橋堂': '10', '北區堂': '11', '祐漢堂': '12'
+  '筷子基堂': '09', '新橋堂': '10', '北區堂': '11', '祐漢堂': '12',
+  '其他教會': '99' // 正式加入其他教會
 };
 
 const CHURCH_GROUP_ORDER = ['總堂', '潮州堂', '新口岸堂', '閩南堂', '其他教會'];
@@ -260,27 +261,51 @@ export default function App() {
   }, [ministers, searchQuery, matchFilter]);
 
 
+  // --- 優化：儲存名單變更與堂會異動處理 ---
   const handleSaveMinister = (e: any) => {
     e.preventDefault();
     if (ministerForm.id) {
       const original = ministers.find(m => m.id === ministerForm.id);
       if (!original) return;
-      const fieldNames: Record<string, string> = { name: '姓名', gender: '性別', church: '所屬堂會', ministry: '所屬事工', phone: '聯絡電話', situation: '現況', assignedStaff: '跟進同工', status: '狀態' };
-      let oldValues: string[] = []; let newValues: string[] = [];
+      
+      let hasChanged = false;
+      let promptLines: string[] = [];
+      let newMemberNumber = original.memberNumber;
+
+      // 1. 特別攔截「堂會」變更，並重新計算編號
+      if (original.church !== ministerForm.church) {
+        hasChanged = true;
+        newMemberNumber = getNextMemberNumber(ministerForm.church);
+        promptLines.push(`• 堂會：由「${original.church || '無'}」改為「${ministerForm.church}」`);
+        promptLines.push(`• 編號：系統將自動從「${original.memberNumber || '無'}」更新為「${newMemberNumber}」`);
+      }
+
+      // 2. 檢查其他欄位
+      const fieldNames: Record<string, string> = { name: '姓名', gender: '性別', ministry: '所屬事工', phone: '聯絡電話', situation: '現況', assignedStaff: '跟進同工', status: '狀態' };
       Object.keys(fieldNames).forEach(key => {
         if (original[key] !== ministerForm[key]) {
-          oldValues.push(original[key] || '(空)'); newValues.push(ministerForm[key] || '(空)');
+          hasChanged = true;
+          promptLines.push(`• ${fieldNames[key]}：由「${original[key] || '(空)'}」改為「${ministerForm[key] || '(空)'}」`);
         }
       });
-      if (oldValues.length > 0) {
+
+      // 3. 顯示明確的條列式修改提示框
+      if (hasChanged) {
         setConfirmDialog({
-          show: true, message: `您正在將 ${oldValues.join('、')} 修改成 ${newValues.join('、')}，請問是否確認？`,
+          show: true, 
+          message: `您確定要儲存以下變更嗎？\n\n${promptLines.join('\n')}`,
           onConfirm: () => {
-            const updated = ministers.map(m => m.id === ministerForm.id ? { ...m, ...ministerForm } : m);
-            updateData(updated); setShowMinisterModal(false); setMinisterForm(defaultMinister); setConfirmDialog({ show: false, message: '', onConfirm: null });
+            const updated = ministers.map(m => m.id === ministerForm.id ? { ...m, ...ministerForm, memberNumber: newMemberNumber } : m);
+            updateData(updated); 
+            setShowMinisterModal(false); 
+            setMinisterForm(defaultMinister); 
+            setConfirmDialog({ show: false, message: '', onConfirm: null });
           }
         });
-      } else { setShowMinisterModal(false); setMinisterForm(defaultMinister); }
+      } else { 
+        setShowMinisterModal(false); 
+        setMinisterForm(defaultMinister); 
+      }
     } else {
       const newMemberNumber = getNextMemberNumber(ministerForm.church);
       const updated = [...ministers, { ...ministerForm, id: Date.now().toString(), memberNumber: newMemberNumber, visits: [] }];
@@ -738,7 +763,18 @@ export default function App() {
                 </div>
                 <div className="flex flex-col gap-1 md:items-end">
                   <span className="text-slate-400 text-xs font-bold">目前狀態:</span>
-                  <span className={`px-3 py-1 text-xs rounded-full font-bold ${selectedMinister.status === '停止跟進' ? 'bg-slate-200 text-slate-500' : 'bg-teal-100 text-teal-800'}`}>{selectedMinister.status || '持續關懷中'}</span>
+                  {(() => {
+                    const isStopped = selectedMinister.status === '停止跟進';
+                    const hasStaff = selectedMinister.assignedStaff && selectedMinister.assignedStaff.trim() !== '';
+                    const hasVisits = selectedMinister.visits && selectedMinister.visits.length > 0;
+                    const displayStatus = isStopped ? '停止跟進' : (hasStaff || hasVisits ? '持續關懷中' : '未設定跟進');
+                    const statusColor = isStopped ? 'bg-slate-200 text-slate-500' : (displayStatus === '未設定跟進' ? 'bg-slate-100 text-slate-500 border border-slate-200' : 'bg-teal-100 text-teal-800');
+                    return (
+                      <span className={`px-3 py-1 text-xs rounded-full font-bold ${statusColor}`}>
+                        {displayStatus}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="md:col-span-2 pt-3 border-t border-slate-200/60 flex flex-col gap-1.5">
                   <span className="text-slate-400 text-xs font-bold">當前現況:</span>
@@ -779,7 +815,6 @@ export default function App() {
                     <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">後續跟進建議</label><textarea rows={3} required value={visitForm.notes} onChange={e => setVisitForm({ ...visitForm, notes: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md mt-1 focus:ring-2 focus:ring-teal-500 outline-none" placeholder="紀錄對話重點及下次行動..."></textarea></div>
                     
                     <div className="bg-teal-50 p-4 rounded-lg border border-teal-200 mt-2">
-                      {/* --- 移除了(選填)字眼 --- */}
                       <label className="text-sm font-bold text-teal-800 flex items-center gap-1 mb-2"><CalendarDays size={16} /> 提醒: 下次預計跟進</label>
                       <div className="flex gap-2">
                         <input type="date" value={visitForm.nextFollowUpDate} onChange={(e) => setVisitForm({ ...visitForm, nextFollowUpDate: e.target.value })} className="w-2/3 p-3 border-2 border-teal-400 rounded-md font-bold text-teal-900 focus:ring-2 focus:ring-teal-500 outline-none" />
@@ -798,13 +833,11 @@ export default function App() {
                   [...selectedMinister.visits].reverse().map((v: any) => (
                     <div key={v.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow relative group">
                       <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* 將編輯按鈕開放給所有使用者 */}
                         <button onClick={() => {
                           let reaction = v.reaction, otherReaction = '';
                           if (!['良好', '一般', '冷淡'].includes(reaction)) { otherReaction = reaction; reaction = '其他'; }
                           setVisitForm({ ...v, reaction, otherReaction }); setShowVisitForm(true);
                         }} className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-md transition-colors" title="編輯紀錄"><Edit size={14} /></button>
-                        {/* 刪除按鈕依然保留給 SuperAdmin */}
                         {isSuperAdmin && (
                           <button onClick={() => handleDeleteVisit(v.id)} className="bg-red-50 hover:bg-red-100 text-red-600 p-1.5 rounded-md transition-colors" title="刪除紀錄"><Trash2 size={14} /></button>
                         )}
@@ -822,8 +855,6 @@ export default function App() {
                           <div className="text-xs font-bold text-slate-500">下次預計跟進日期:</div>
                           <div className="flex items-center gap-2">
                             {v.nextFollowUpDate ? <div className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">{v.nextFollowUpDate} {v.nextFollowUpTime || '10:00'}</div> : <div className="font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">未設定</div>}
-                            
-                            {/* 新增專屬的日期修改按鈕 */}
                             <button onClick={() => {
                               let reaction = v.reaction, otherReaction = '';
                               if (!['良好', '一般', '冷淡'].includes(reaction)) { otherReaction = reaction; reaction = '其他'; }
